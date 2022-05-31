@@ -23,6 +23,18 @@ let satelliteStreets = L.tileLayer(
   }
 );
 
+// We create the second tile layer that will be the background of our map.
+let darkStreets = L.tileLayer(
+  "https://api.mapbox.com/styles/v1/mapbox/dark-v10/tiles/{z}/{x}/{y}?access_token={accessToken}",
+  {
+    attribution:
+      'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery (c) <a href="https://www.mapbox.com/">Mapbox</a>',
+    maxZoom: 18,
+    accessToken: API_KEY,
+  }
+);
+
+
 // Create the map object with center, zoom level and default layer.
 let map = L.map("mapid", {
   center: [40.7, -94.5],
@@ -34,16 +46,21 @@ let map = L.map("mapid", {
 let baseMaps = {
   Streets: streets,
   Satellite: satelliteStreets,
+  Dark: darkStreets,
 };
 
 // 1. Add a 2nd layer group for the tectonic plate data.
 let allEarthquakes = new L.LayerGroup();
 let allTechonicPlates = new L.LayerGroup();
+// 2-1. Add a 3rd layer group for the major earthquake data.
+let majorEarthquakes = new L.LayerGroup();
 
 // 2. Add a reference to the tectonic plates group to the overlays object.
-let overlays = {
+let overlays = {  
   "Techonic Plates": allTechonicPlates,
   Earthquakes: allEarthquakes,
+  // 2-2. Add major earthquake group 
+  "Major Earthquakes": majorEarthquakes,
 };
 
 // Then we add a control to the map that will allow the user to change which
@@ -68,7 +85,7 @@ d3.json(
       weight: 0.5,
     };
   }
-
+  
   // This function determines the color of the marker based on the magnitude of the earthquake.
   function getColor(magnitude) {
     if (magnitude > 5) {
@@ -121,6 +138,66 @@ d3.json(
 
   // Then we add the earthquake layer to our map.
   allEarthquakes.addTo(map);
+ 
+// 2-3. Retrieve the major earthquake GeoJSON data >4.5 mag for the week.
+d3.json("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_week.geojson").then(function(quakesData) {
+  
+  //2-4. Use the same style as the earthquake data.  
+  function styleInfo(feature) {
+    return {
+      opacity: 1,
+      fillOpacity: 1,
+      fillColor: getMajorColor(feature.properties.mag),
+      color: "#000000",
+      radius: getMajorRadius(feature.properties.mag),
+      stroke: true,
+      weight: 0.5,
+    };
+  }
+   //2-5. Change the color function to use three colors for the major earthquakes based on the magnitude of the earthquake.  
+  function getMajorColor(magnitude) {
+    //console.log(magnitude);
+    if (magnitude > 6) {
+      return "#800026";
+    }
+    if (magnitude > 5) {
+      return "#FC4E2A";
+    }    
+      return "#FFEDA0";    
+  }  
+  // 2-6. Use the function that determines the radius of the earthquake marker based on its magnitude.
+  function getMajorRadius(magnitude) {
+    if (magnitude === 0) {
+      return 1;
+    }
+    return magnitude * 4;
+  }  
+  
+  // 2-7. Creating a GeoJSON layer with the retrieved data that adds a circle to the map 
+  // sets the style of the circle, and displays the magnitude and location of the earthquake
+  //  after the marker has been created and styled.
+  L.geoJson(quakesData, {
+    pointToLayer: function(feature, latlng) {
+      //console.log(data);
+      return L.circleMarker(latlng);
+
+    },
+    style: styleInfo,
+    onEachFeature: function (feature, layer) {           
+      layer.bindPopup("Magnitude: " +
+          feature.properties.mag +
+          "<br>Location: " +
+          feature.properties.place
+      );
+    },
+  }).addTo(majorEarthquakes);
+  // 2-8. Add the major earthquakes layer to the map.
+  majorEarthquakes.addTo(map);
+  //2-9. Close the braces and parentheses for the major earthquake data.
+});
+
+
+
 
   // Here we create a legend control object.
   let legend = L.control({
@@ -168,7 +245,7 @@ d3.json(
   // 3. Use d3.json to make a call to get our Tectonic Plate geoJSON data.
   d3.json("https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json"
   ).then(function (plateData) {
-    console.log(plateData);
+    //console.log(plateData);
     L.geoJson(plateData, {
       style: plateStyle,
     }).addTo(allTechonicPlates);
